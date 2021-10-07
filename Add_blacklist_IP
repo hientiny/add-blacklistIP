@@ -1,0 +1,408 @@
+import os.path
+import time
+import tkinter.filedialog
+import tkinter.messagebox
+from tkinter import *
+import openpyxl
+import requests, json
+
+screen = Tk()
+screen.iconphoto(False, tkinter.PhotoImage(file=r'C:\Users\a\Desktop\sxo.png'))
+screen.title('SXO Add backlist IP')
+# screen.geometry("500x150")
+screen.resizable(False, False)
+screen.eval('tk::PlaceWindow . center')
+
+global serverIP
+# Real server
+serverIP = '172.17.172.100'
+# Test server
+# serverIP = '192.168.5.101'
+
+label5 = Label(screen, text='            ')
+label5.grid(row=9, column=0, columnspan=3)
+
+log_screen = Text(screen)
+log_screen.grid(row=10, rowspan=30, column=0, columnspan=5, sticky=tkinter.E + tkinter.W)
+
+datapath = Entry(screen, text='', width=50)
+datapath.grid(row=2, column=0, columnspan=3, sticky=W)
+
+label1 = Label(screen, text='Data path')
+label1.grid(row=1, column=0)
+
+label2 = Label(screen, text='            ')
+label2.grid(row=3, column=0, columnspan=3)
+
+group_label = Label(screen, text='Group name')
+group_label.grid(row=3, column=0)
+
+group_option = IntVar()
+group_option.set(0)
+list_group1 = Radiobutton(screen, text='BLACKLIST_PUBLIC-IP', value=0, variable=group_option)
+list_group1.grid(row=4, column=0, sticky=W)
+
+list_group2 = Radiobutton(screen, text='BlacklistIP_C2_Emotet', value=1, variable=group_option)
+list_group2.grid(row=4, column=1, sticky=W)
+list_group3 = Radiobutton(screen, text='None', value=2, variable=group_option)
+list_group3.grid(row=4, column=2, sticky=W)
+label3 = Label(screen, text='            ')
+label3.grid(row=5, column=0, columnspan=3)
+
+r = IntVar()
+r.set(0)
+
+add_host_radio_button = Radiobutton(screen, text='Add Host', value=0, variable=r, )
+add_host_radio_button.grid(row=2, column=3, sticky=W)
+
+add_net_radio_button = Radiobutton(screen, text='Add Netv4', value=1, variable=r, )
+add_net_radio_button.grid(row=2, column=4, sticky=W)
+
+
+def select_file():
+    filetypes = (
+        ('Excel', '*.xlsx'),
+        ('All files', '*.*')
+    )
+    fd = tkinter.filedialog.askopenfile(
+        title='Open a file',
+        initialdir=r'C:\Users\a\Desktop',
+        filetypes=filetypes
+    )
+    # showinfo (title = 'Selected file', message = fd)
+    if fd:
+        filepath = os.path.abspath(fd.name)
+        datapath.delete(0, END)
+        datapath.insert(0, filepath)
+
+
+def api_call(ip_addr, port, command, json_payload, sid):
+    url = 'https://' + ip_addr + ':' + port + '/web_api/' + command
+    if sid == '':
+        request_headers = {'Content-Type': 'application/json'}
+    else:
+        request_headers = {'Content-Type': 'application/json', 'X-chkp-sid': sid}
+    r = requests.post(url, data=json.dumps(json_payload), headers=request_headers, verify=False)
+    return r.json()
+
+
+def login(user, password):
+    payload = {'user': user, 'password': password}
+    response = api_call(f'{serverIP}', '443', 'login', payload, '')
+    return response["sid"]
+
+
+def show_log_to_screen(log):
+    current = log_screen.get("1.0", "end")
+    log_screen.delete("1.0", "end")
+    log_screen.insert("1.0", str(current) + str(log) + '\n')
+
+
+def implement():
+    newWindows = Toplevel(screen)
+    newWindows.title("Login to SMS")
+    newWindows.geometry("200x130")
+    newWindows.iconphoto(False, tkinter.PhotoImage(file=r'C:\Users\a\Desktop\sxo.png'))
+    windowWidth = newWindows.winfo_reqwidth()
+    windowHeight = newWindows.winfo_reqheight()
+    positionRight = int(newWindows.winfo_screenwidth() / 2 - windowWidth / 2)
+    positionDown = int(newWindows.winfo_screenheight() / 2 - windowHeight / 2)
+    newWindows.geometry("+{}+{}".format(positionRight, positionDown))
+    sms_ip = Label(newWindows, text=f'SMS IP: {serverIP}')
+    sms_ip.grid(row=0, column=0, columnspan=3, sticky=W)
+    label1 = Label(newWindows, text='Nhap username va password')
+    label1.grid(row=1, column=0, columnspan=3, sticky=W)
+    empty_label = Label(newWindows, text='         ')
+    empty_label.grid(row=2, column=0, sticky=W)
+    username_label = Label(newWindows, text='Username: ')
+    username_label.grid(row=3, column=0, sticky=W)
+    pass_label = Label(newWindows, text='Password: ')
+    pass_label.grid(row=4, column=0, sticky=W)
+    username_entry = Entry(newWindows, )
+    username_entry.grid(row=3, column=1, columnspan=2)
+    password_entry = Entry(newWindows, show='*')
+    password_entry.grid(row=4, column=1, columnspan=2, )
+    empty_label.grid(row=5, column=0, sticky=W)
+
+    def ok_command():
+        tendangnhap = username_entry.get()
+        matkhau = password_entry.get()
+
+        def addhost():
+            ketnoi = False
+            if group_option.get() == 0:
+                try:
+                    sid = login(tendangnhap, matkhau)
+                    ketnoi = True
+                    show_log_to_screen('Dang nhap thanh cong')
+                except Exception as bug:
+                    show_log_to_screen(str(bug) + ' Dang nhap that bai')
+                if ketnoi:
+                    wb = openpyxl.load_workbook(datapath.get())
+                    ws = wb.active
+                    i = 1
+                    while (ws[f'A{i}'].value) != None:
+                        value = ws[f'A{i}'].value
+                        new_host_data = {'name': f'BlaclistIP_{value}', 'ip-address': value,
+                                         'groups': 'BLACKLIST_PUBLIC-IP'}
+                        try:
+                            new_host_result = api_call(f'{serverIP}', '443', 'add-host', new_host_data, sid)
+                            show_log_to_screen(json.dumps(new_host_result))
+                        except Exception as bug:
+                            show_log_to_screen(bug)
+                        # print(json.dumps(new_host_result))
+
+                        i += 1
+                    publish_result = api_call(f'{serverIP}', '443', "publish", {}, sid)
+                    time.sleep(15)
+                    show_log_to_screen('Publish xong ' + str(json.dumps(publish_result)))
+                    logout_result = api_call(f'{serverIP}', '443', "logout", {}, sid)
+                    time.sleep(5)
+                    show_log_to_screen('Thoat ra' + str(json.dumps(logout_result)))
+                    wb.close()
+                    if json.dumps(logout_result).__contains__('OK'):
+                        tkinter.messagebox.showinfo(title="Thong Bao", message='Da xong')
+                        newWindows.destroy()
+                    else:
+                        tkinter.messagebox.showwarning(title="Loi", message=json.dumps(logout_result))
+
+            elif group_option.get() == 1:
+
+                try:
+                    sid = login(tendangnhap, matkhau)
+                    ketnoi = True
+                    show_log_to_screen('Dang nhap thanh cong')
+                except Exception as bug:
+                    show_log_to_screen(str(bug) + ' Dang nhap that bai')
+                if ketnoi:
+
+                    wb = openpyxl.load_workbook(datapath.get())
+                    ws = wb.active
+                    i = 1
+                    while (ws[f'A{i}'].value) != None:
+                        value = ws[f'A{i}'].value
+                        new_host_data = {'name': f'BlaclistIP_{value}', 'ip-address': value,
+                                         'groups': 'BlacklistIP_C2_Emotet'}
+                        try:
+                            new_host_result = api_call(f'{serverIP}', '443', 'add-host', new_host_data, sid)
+                            show_log_to_screen(json.dumps(new_host_result))
+                        except Exception as bug:
+                            show_log_to_screen(json.dumps(bug))
+                            # print(json.dumps(new_host_result))
+
+                        i += 1
+                    publish_result = api_call(f'{serverIP}', '443', "publish", {}, sid)
+                    time.sleep(15)
+                    show_log_to_screen('Publish xong ' + str(json.dumps(publish_result)))
+                    logout_result = api_call(f'{serverIP}', '443', "logout", {}, sid)
+                    time.sleep(5)
+                    show_log_to_screen('Thoat ra' + str(json.dumps(logout_result)))
+                    wb.close()
+                    if json.dumps(logout_result).__contains__('OK'):
+                        tkinter.messagebox.showinfo(title="Thong Bao", message='Da xong')
+                        newWindows.destroy()
+                    else:
+                        tkinter.messagebox.showwarning(title="Loi", message=json.dumps(logout_result))
+            elif group_option.get() == 2:
+                try:
+                    sid = login(tendangnhap, matkhau)
+                    ketnoi = True
+                    show_log_to_screen('Dang nhap thanh cong')
+                except Exception as bug:
+                    show_log_to_screen(str(bug) + ' Dang nhap that bai')
+                if ketnoi:
+
+                    # sid = login(tendangnhap, matkhau)
+                    wb = openpyxl.load_workbook(datapath.get())
+                    ws = wb.active
+                    i = 1
+                    while (ws[f'A{i}'].value) != None:
+                        value = ws[f'A{i}'].value
+                        new_host_data = {'name': f'BlaclistIP_{value}', 'ip-address': value,
+                                         }
+                        try:
+                            new_host_result = api_call(f'{serverIP}', '443', 'add-host', new_host_data, sid)
+                            show_log_to_screen(json.dumps(new_host_result))
+                        except Exception as bug:
+                            show_log_to_screen(json.dumps(bug))
+                            # print(json.dumps(new_host_result))
+
+                        i += 1
+                    publish_result = api_call(f'{serverIP}', '443', "publish", {}, sid)
+                    time.sleep(15)
+                    show_log_to_screen('Publish xong ' + str(json.dumps(publish_result)))
+                    logout_result = api_call(f'{serverIP}', '443', "logout", {}, sid)
+                    time.sleep(5)
+                    show_log_to_screen('Thoat ra' + str(json.dumps(logout_result)))
+                    wb.close()
+                    if json.dumps(logout_result).__contains__('OK'):
+                        tkinter.messagebox.showinfo(title="Thong Bao", message='Da xong')
+                        newWindows.destroy()
+                    else:
+                        tkinter.messagebox.showwarning(title="Loi", message=json.dumps(logout_result))
+
+        def addNetwork():
+            ketnoi = False
+            if group_option.get() == 0:
+                try:
+                    sid = login(tendangnhap, matkhau)
+                    ketnoi = True
+                    show_log_to_screen('Dang nhap thanh cong')
+                except Exception as bug:
+                    show_log_to_screen(str(bug) + ' Dang nhap that bai')
+                if ketnoi:
+
+                    # sid = login(tendangnhap, matkhau)
+                    wb = openpyxl.load_workbook(datapath.get())
+                    ws = wb.active
+                    if ws['B1'].value != None:
+                        i = 1
+                        while (ws[f'A{i}'].value) != None:
+                            subnet = ws[f'A{i}'].value
+                            subnet_mask = ws[f'B{i}'].value
+                            new_network_data = {'name': f'BlaclistIP_{subnet}', 'subnet': subnet,
+                                                'subnet-mask': f'{subnet_mask}', 'groups': 'BLACKLIST_PUBLIC-IP'}
+                            try:
+                                new_network_result = api_call(f'{serverIP}', '443', 'add-network', new_network_data, sid)
+                                show_log_to_screen(json.dumps(new_network_result))
+                            except Exception as bug:
+                                show_log_to_screen(json.dumps(bug))
+                                # print(json.dumps(new_network_result))
+                            i += 1
+                    else:
+                        tkinter.messagebox.showwarning(title="Warning",
+                                                       message='Khoi tao subnet mask trong file list IP')
+                    publish_result = api_call(f'{serverIP}', '443', "publish", {}, sid)
+                    time.sleep(15)
+                    show_log_to_screen('Publish xong ' + str(json.dumps(publish_result)))
+                    logout_result = api_call(f'{serverIP}', '443', "logout", {}, sid)
+                    show_log_to_screen('Thoat ra' + str(json.dumps(logout_result)))
+                    time.sleep(5)
+                    wb.close()
+                    if json.dumps(logout_result).__contains__('OK'):
+                        tkinter.messagebox.showinfo(title="Thong Bao", message='Da xong')
+                        newWindows.destroy()
+                    else:
+                        tkinter.messagebox.showwarning(title="Loi", message=json.dumps(logout_result))
+            elif group_option.get() == 1:
+
+                try:
+                    sid = login(tendangnhap, matkhau)
+                    ketnoi = True
+                    show_log_to_screen('Dang nhap thanh cong')
+                except Exception as bug:
+                    show_log_to_screen(str(bug) + ' Dang nhap that bai')
+                if ketnoi:
+
+                    # sid = login(tendangnhap, matkhau)
+                    wb = openpyxl.load_workbook(datapath.get())
+                    ws = wb.active
+                    if ws['B1'].value != None:
+                        i = 1
+                        while (ws[f'A{i}'].value) != None:
+                            subnet = ws[f'A{i}'].value
+                            subnet_mask = ws[f'B{i}'].value
+                            new_network_data = {'name': f'BlaclistIP_{subnet}', 'subnet': subnet,
+                                                'subnet-mask': f'{subnet_mask}', 'groups': 'BlacklistIP_C2_Emotet'}
+                            try:
+                                new_network_result = api_call(f'{serverIP}', '443', 'add-network', new_network_data, sid)
+                                show_log_to_screen(json.dumps(new_network_result))
+                            except Exception as bug:
+                                show_log_to_screen(json.dumps(bug))
+                                # print(json.dumps(new_network_result))
+                            i += 1
+                    else:
+                        tkinter.messagebox.showwarning(title="Warning",
+                                                       message='Khoi tao subnet mask trong file list IP')
+                    publish_result = api_call(f'{serverIP}', '443', "publish", {}, sid)
+                    show_log_to_screen('Publish xong ' + str(json.dumps(publish_result)))
+                    time.sleep(15)
+                    logout_result = api_call(f'{serverIP}', '443', "logout", {}, sid)
+                    show_log_to_screen('Thoat ra' + str(json.dumps(logout_result)))
+                    time.sleep(5)
+                    wb.close()
+                    if json.dumps(logout_result).__contains__('OK'):
+                        tkinter.messagebox.showinfo(title="Thong Bao", message='Da xong')
+                        newWindows.destroy()
+                    else:
+                        tkinter.messagebox.showwarning(title="Loi", message=json.dumps(logout_result))
+            elif group_option.get() == 2:
+                try:
+                    sid = login(tendangnhap, matkhau)
+                    ketnoi = True
+                    show_log_to_screen('Dang nhap thanh cong')
+                except Exception as bug:
+                    show_log_to_screen(str(bug) + ' Dang nhap that bai')
+                if ketnoi == True:
+                    # sid = login(tendangnhap, matkhau)
+                    wb = openpyxl.load_workbook(datapath.get())
+                    ws = wb.active
+                    if ws['B1'].value != None:
+                        i = 1
+                        while (ws[f'A{i}'].value) != None:
+                            subnet = ws[f'A{i}'].value
+                            subnet_mask = ws[f'B{i}'].value
+                            new_network_data = {'name': f'BlaclistIP_{subnet}', 'subnet': subnet,
+                                                'subnet-mask': f'{subnet_mask}'}
+                            try:
+                                new_network_result = api_call(f'{serverIP}', '443', 'add-network', new_network_data, sid)
+                                show_log_to_screen(json.dumps(new_network_result))
+                            except Exception as bug:
+                                show_log_to_screen(json.dumps(bug))
+                                # print(json.dumps(new_network_result))
+                            i += 1
+                    else:
+                        tkinter.messagebox.showwarning(title="Warning",
+                                                       message='Khoi tao subnet mask trong file list IP')
+                    publish_result = api_call(f'{serverIP}', '443', "publish", {}, sid)
+                    time.sleep(15)
+                    show_log_to_screen('Publish xong ' + str(json.dumps(publish_result)))
+                    logout_result = api_call(f'{serverIP}', '443', "logout", {}, sid)
+                    time.sleep(5)
+                    show_log_to_screen('Thoat ra' + str(json.dumps(logout_result)))
+                    wb.close()
+                    if json.dumps(logout_result).__contains__('OK'):
+                        tkinter.messagebox.showinfo(title="Thong Bao", message='Da xong')
+                        newWindows.destroy()
+                    else:
+                        tkinter.messagebox.showwarning(title="Loi", message=json.dumps(logout_result))
+
+        if r.get() == 0:
+            addhost()
+
+        elif r.get() == 1:
+
+            addNetwork()
+
+        elif r.get() == 2:
+            ## No selection choosed
+            tkinter.messagebox.showwarning(title='Warning', message='Hay lua chon loai object!')
+        else:
+            tkinter.messagebox.showwarning(title='Warning', message='Ket noi that bai')
+
+    OK_button = Button(newWindows, text='GO', command=ok_command)
+    OK_button.grid(row=6, column=1)
+
+    def cancel_command():
+        username_entry.delete(0, END)
+        password_entry.delete(0, END)
+        newWindows.destroy()
+
+    Cancle_button = Button(newWindows, text='Cancel', command=cancel_command)
+    Cancle_button.grid(row=6, column=2)
+
+
+def cancle():
+    screen.destroy()
+
+
+open_button = Button(screen, text='Open', padx=20, pady=10, command=select_file)
+open_button.grid(row=6, column=0)
+
+implement_button = Button(screen, text='Implement', padx=20, pady=10, command=implement, )
+implement_button.grid(row=6, column=1)
+
+cancel_button1 = Button(screen, text='Cancel', padx=20, pady=10, command=cancle, )
+cancel_button1.grid(row=6, column=2)
+
+screen.mainloop()
